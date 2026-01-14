@@ -17,12 +17,11 @@ class VolatilityApp:
         self.root.title("Finansal Volatilite Tahmin Aracı (GARCH)")
         self.root.geometry("550x700")
         
-        # --- PENCEREYİ ÖNE GETİRME (YENİ EKLENEN KISIM) ---
-        self.root.lift() # Pencereyi yukarı kaldır
-        self.root.attributes('-topmost', True) # En üstte kalmaya zorla
-        self.root.after_idle(self.root.attributes, '-topmost', False) # Zorlamayı kaldır (Kullanıcı başka yere tıklayabilsin)
-        self.root.focus_force() # Klavyeyi/fareyi buraya odakla
-        # --------------------------------------------------
+        # --- PENCEREYİ ÖNE GETİRME ---
+        self.root.lift()
+        self.root.attributes('-topmost', True)
+        self.root.after_idle(self.root.attributes, '-topmost', False)
+        self.root.focus_force()
         
         # --- DEĞİŞKENLER ---
         self.file_path = tk.StringVar()
@@ -122,7 +121,6 @@ class VolatilityApp:
                     self.combo_asset.current(0)
                     self.status_var.set(f"Dosya yüklendi. {len(potential_assets)} varlık bulundu.")
                 else:
-                    # Başlık bulamazsa tüm sütunları göster
                     self.combo_asset['values'] = cols
                     self.combo_asset.current(0)
                     self.status_var.set("Dosya yüklendi.")
@@ -131,7 +129,6 @@ class VolatilityApp:
                 messagebox.showerror("Hata", f"Dosya okunamadı: {e}")
 
     def get_clean_data(self, asset_name):
-        # --- BU KISIM VERİ YAPINIZA GÖRE DÜZELTİLDİ ---
         path = self.file_path.get()
         if not path: return None
         
@@ -169,9 +166,21 @@ class VolatilityApp:
                 # Log Getiri
                 data['Returns'] = 100 * np.log(data['Price'] / data['Price'].shift(1))
                 data = data.replace([np.inf, -np.inf], np.nan).dropna()
+                
+                # --- KONSOL ÇIKTISI (KONTROL İÇİN) ---
+                print("\n" + "="*50)
+                print(f"--- VERİ KONTROLÜ: {asset_name} ---")
+                print("="*50)
+                print("\n>>> İLK 20 SATIR:")
+                print(data[['Price', 'Returns']].head(20))
+                print("\n>>> SON 20 SATIR:")
+                print(data[['Price', 'Returns']].tail(20))
+                print("="*50 + "\n")
+                # -------------------------------------
+                
                 return data
             else:
-                raise ValueError("Veri boş.")
+                raise ValueError("Veri temizlendikten sonra boş kaldı.")
                 
         except Exception as e:
             messagebox.showerror("Veri Hatası", str(e))
@@ -203,7 +212,7 @@ class VolatilityApp:
 
     def run_future(self, df, asset_name):
         days = self.future_days.get()
-        y = df['Returns'].values
+        y = df['Returns'].values # Tüm veriyi kullan
         
         # Model
         model = arch_model(y, vol='Garch', p=1, q=1, mean='Constant', dist='Normal')
@@ -237,11 +246,14 @@ class VolatilityApp:
         
         # Grafik
         plt.figure(figsize=(12, 7))
-        history = df['Price'].iloc[-90:]
-        plt.plot(history.index, history.values, label='Geçmiş (Son 90 Gün)', color='black')
+        
+        # --- DÜZENLEME: SON 365 GÜN (1 YIL) GÖSTERİMİ ---
+        history = df['Price'].iloc[-365:] 
+        
+        plt.plot(history.index, history.values, label='Geçmiş (Son 1 Yıl)', color='black')
         plt.plot(pred_df.index, pred_df['Price'], label='Tahmin (Ortalama)', color='red', linestyle='--')
         plt.fill_between(pred_df.index, pred_df['Low'], pred_df['High'], color='red', alpha=0.2, label='%95 Güven Aralığı')
-        plt.title(f"{asset_name} - Gelecek {days} Günlük Tahmin")
+        plt.title(f"{asset_name} - Gelecek {days} Günlük Tahmin (GARCH)")
         plt.xlabel("Tarih")
         plt.ylabel("Fiyat")
         plt.legend()
@@ -267,7 +279,7 @@ class VolatilityApp:
         
         # İlerlemeyi göstermek için basit döngü
         total = len(test_dates)
-        step = max(1, total // 20) # Arayüzü çok dondurmamak için her adımda update etme
+        step = max(1, total // 20) 
         
         for i, current_date in enumerate(test_dates):
             if i % step == 0:
